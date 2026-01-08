@@ -1,0 +1,394 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  Normal
+  Instructor
+  Admin
+}
+
+enum BookingStatus {
+  Requested
+  Approved
+  Rejected
+  Cancelled
+  Completed
+}
+
+enum ApplicationStatus {
+  Submitted
+  UnderReview
+  Approved
+  Rejected
+  InProgress
+  Completed
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      Role     @default(Normal)
+  passwordHash String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  profile   UserProfile?
+
+  // Learning
+  enrollments CourseEnrollment[]
+  courses     Course[]           @relation("InstructorCourses")
+
+  // Consulting
+  availability ConsultantAvailability[] @relation("ConsultantAvailability")
+  bookingsRequested ConsultantBooking[] @relation("BookingRequester")
+  bookingsAsConsultant ConsultantBooking[] @relation("BookingConsultant")
+
+  // Community
+  threads    DiscussionThread[]
+  posts      DiscussionPost[]
+  questions  Question[]
+  answers    Answer[]
+
+  // Applications
+  programApplications ProgramApplication[]
+  jobApplications     JobApplication[]
+}
+
+model UserProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  headline    String   @default("")
+  bio         String?
+  location    String?
+  phone       String?
+
+  skills      SkillTag[]
+  workHistory WorkHistoryItem[]
+  education   EducationItem[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SkillTag {
+  id         String   @id @default(cuid())
+  profileId  String
+  profile    UserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  name       String
+  level      Int      @default(3) // 1-5
+}
+
+model WorkHistoryItem {
+  id        String   @id @default(cuid())
+  profileId String
+  profile   UserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  company   String
+  title     String
+  startDate DateTime?
+  endDate   DateTime?
+  summary   String?
+}
+
+model EducationItem {
+  id        String   @id @default(cuid())
+  profileId String
+  profile   UserProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  school         String
+  major          String?
+  graduationDate DateTime?
+  notes          String?
+}
+
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  body        String
+  isPublished Boolean  @default(true)
+  badge       String?  // e.g., "긴급", "안내"
+  publishFrom DateTime @default(now())
+  publishTo   DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model FaqItem {
+  id          String   @id @default(cuid())
+  question    String
+  answer      String
+  isPublished Boolean  @default(true)
+  sortOrder   Int      @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Inquiry {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  subject   String
+  message   String
+  status    String   @default("Open") // Open/Answered/Closed
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Program {
+  id          String   @id @default(cuid())
+  name        String
+  field       String   // 분야
+  description String
+  statusLabel String   @default("진행중") // 진행중/마감예정/종료 등
+  applyOpen   DateTime?
+  applyClose  DateTime?
+
+  isPublished Boolean  @default(true)
+
+  applications ProgramApplication[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ProgramApplication {
+  id        String   @id @default(cuid())
+  programId String
+  program   Program  @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  appliedAt DateTime  @default(now())
+  status    ApplicationStatus @default(Submitted)
+
+  notes     String?
+
+  @@unique([programId, userId])
+}
+
+model JobPosting {
+  id          String   @id @default(cuid())
+  title       String
+  company     String
+  location    String?
+  jobType     String? // 고용형태
+  salary      String?
+  description String
+  requirements String?
+
+  isPublished Boolean  @default(true)
+
+  applications JobApplication[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model JobApplication {
+  id        String   @id @default(cuid())
+  jobId     String
+  job       JobPosting @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  appliedAt DateTime   @default(now())
+  status    ApplicationStatus @default(Submitted)
+  coverLetter String?
+
+  @@unique([jobId, userId])
+}
+
+model Course {
+  id           String   @id @default(cuid())
+  title        String
+  description  String
+  thumbnailUrl String?
+  isPublished  Boolean  @default(false)
+
+  instructorId String
+  instructor   User     @relation("InstructorCourses", fields: [instructorId], references: [id], onDelete: Restrict)
+
+  lessons      Lesson[]
+  enrollments  CourseEnrollment[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Lesson {
+  id        String @id @default(cuid())
+  courseId  String
+  course    Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  title     String
+  videoUrl  String?
+  sortOrder Int     @default(0)
+  durationSeconds Int @default(0)
+}
+
+model CourseEnrollment {
+  id        String @id @default(cuid())
+  courseId  String
+  course    Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  enrolledAt DateTime @default(now())
+  progressPercent Int @default(0)
+
+  @@unique([courseId, userId])
+}
+
+model LearningResource {
+  id        String @id @default(cuid())
+  title     String
+  fileUrl   String
+  fileSize  String?
+  category  String? // e.g. "PDF", "DOC", etc.
+  downloads Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ConsultantAvailability {
+  id           String   @id @default(cuid())
+  consultantId String
+  consultant   User     @relation("ConsultantAvailability", fields: [consultantId], references: [id], onDelete: Cascade)
+
+  startUtc     DateTime
+  endUtc       DateTime
+  isActive     Boolean @default(true)
+
+  bookings     ConsultantBooking[]
+}
+
+model ConsultantBooking {
+  id            String   @id @default(cuid())
+  availabilityId String
+  availability   ConsultantAvailability @relation(fields: [availabilityId], references: [id], onDelete: Cascade)
+
+  requesterId    String
+  requester      User     @relation("BookingRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+
+  consultantId   String
+  consultant     User     @relation("BookingConsultant", fields: [consultantId], references: [id], onDelete: Cascade)
+
+  topic          String
+  notes          String?
+  status         BookingStatus @default(Requested)
+  decisionAt     DateTime?
+  decisionBy     String?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model DiscussionThread {
+  id        String @id @default(cuid())
+  title     String
+  locked    Boolean @default(false)
+
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  posts     DiscussionPost[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DiscussionPost {
+  id        String @id @default(cuid())
+  threadId  String
+  thread    DiscussionThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  body      String
+
+  createdAt DateTime @default(now())
+}
+
+model Question {
+  id        String @id @default(cuid())
+  title     String
+  body      String
+  resolved  Boolean @default(false)
+
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  answers   Answer[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Answer {
+  id         String @id @default(cuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  userId     String
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  body       String
+  accepted   Boolean @default(false)
+
+  createdAt  DateTime @default(now())
+}
+
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
