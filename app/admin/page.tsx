@@ -3,7 +3,7 @@ import { requireRole } from "@/lib/guards";
 import { setUserRole, publishAnnouncement, addFaq, closeInquiry } from "./server-actions";
 
 export default async function AdminPage() {
-  const session = const session = await requireRole(["Admin"]);
+  const session = await requireRole(["Admin"]);
 
   const user = session.user as any;
 
